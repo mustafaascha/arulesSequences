@@ -59,6 +59,64 @@ read_baskets <- function(con, sep = "[ \t]+", info = NULL, iteminfo = NULL) {
     x
 }
 
+#' Fast read_baskets
+#' readr_baskets uses parallel processing and faster character manipulation to 
+#'    provide a significantly faster implementation of read_baskets. This is useful
+#'    for datasets over several hundred MB. 
+readr_baskets <- function (con, sep = "[ \t]+", info = NULL, iteminfo = NULL, encoding = "unknown") {
+    x <- read_lines(con)
+    x <- str_replace_all(string = x, pattern = "^[ \t]+", replacement = "")
+    x <- str_split(string = x, pattern = sep)
+    if (!is.null(info)) {
+      i <- info
+      info <- mclapply(seq(length(info)), function(k) sapply(x, 
+                                                           "[", k),
+                       mc.cores = 4)
+      names(info) <- i
+      x <- mclapply(x, "[", -seq(length(info)),
+                  mc.cores = 4)
+      x <- mclapply(x, unique, mc.cores = 4)
+    }
+    x <- as(x, "transactions")
+    if (!is.null(info)) {
+      if (!is.null(info[["sequenceID"]])) {
+        info[["sequenceID"]] <- .as_integer(info[["sequenceID"]])
+        if (is.integer(info[["sequenceID"]])) 
+          if (any(info[["sequenceID"]] < 1L)) 
+            warning("sequenceID not positive")
+      }
+      if (!is.null(info[["eventID"]])) {
+        info[["eventID"]] <- .as_integer(info[["eventID"]])
+        if (is.factor(info[["eventID"]])) 
+          warning("'eventID' is a factor")
+        else if (any(info[["eventID"]] < 1L)) 
+          warning("eventID not positive")
+        if (!is.null(info[["sequenceID"]])) 
+          if (any(order(info[["sequenceID"]], info[["eventID"]]) != 
+                  seq_along(info[["sequenceID"]]))) 
+            warning("'sequenceID' and/or 'eventID not ordered")
+      }
+      if (TRUE) {
+        i <- sapply(info, is.character)
+        info[i] <- mclapply(info[i], type.convert, mc.cores = 4)
+      }
+      transactionInfo(x) <- data.frame(info, stringsAsFactors = FALSE)
+    }
+    if (!is.null(iteminfo)) {
+      if (!is.data.frame(iteminfo)) 
+        stop("'iteminfo' not a data frame")
+      labels <- itemLabels(x)
+      if (!all(labels %in% rownames(iteminfo))) 
+        stop("the row names of 'iteminfo' do not match the item labels")
+      iteminfo <- iteminfo[labels, , drop = FALSE]
+      if ("labels" %in% names(iteminfo)) 
+        iteminfo[["labels"]] <- as.character(iteminfo[["labels"]])
+      else iteminfo <- cbind(x@itemInfo, iteminfo)
+      itemInfo(x) <- iteminfo
+    }
+    x
+  }
+
 ## currently internal only
 
 read_spade <- 
