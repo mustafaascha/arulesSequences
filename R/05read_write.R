@@ -63,7 +63,7 @@ read_baskets <- function(con, sep = "[ \t]+", info = NULL, iteminfo = NULL) {
 #' readr_baskets uses parallel processing and faster character manipulation to 
 #'    provide a significantly faster implementation of read_baskets. This is useful
 #'    for datasets over several hundred MB. 
-readr_baskets <- function (con, sep = "[ \t]+", info = NULL, iteminfo = NULL, encoding = "unknown") {
+readr_baskets <- function (con, sep = "[ \t]+", info = NULL, iteminfo = NULL, encoding = "unknown", mc.cores = 1) {
     x <- read_lines(con)
     x <- str_replace_all(string = x, pattern = "^[ \t]+", replacement = "")
     x <- str_split(string = x, pattern = sep)
@@ -71,11 +71,11 @@ readr_baskets <- function (con, sep = "[ \t]+", info = NULL, iteminfo = NULL, en
       i <- info
       info <- mclapply(seq(length(info)), function(k) sapply(x, 
                                                            "[", k),
-                       mc.cores = 4)
+                       mc.cores = mc.cores)
       names(info) <- i
       x <- mclapply(x, "[", -seq(length(info)),
-                  mc.cores = 4)
-      x <- mclapply(x, unique, mc.cores = 4)
+                  mc.cores = mc.cores)
+      x <- mclapply(x, unique, mc.cores = mc.cores)
     }
     x <- as(x, "transactions")
     if (!is.null(info)) {
